@@ -1,0 +1,5 @@
+<resources>
+    <string name="error_add_app_id">ERROR : Please add appId in your project\'s manifest!\nFor more info : https://documentation.appsonair.com/Mobile-Quickstart/android-sdk-setup</string>
+    <string name="error_add_meta_data">ERROR : Please add meta-data in your project\'s manifest!\nFor more info : https://documentation.appsonair.com/Mobile-Quickstart/android-sdk-setup</string>
+    <string name="error_something_wrong">ERROR : Something went wrong, please verify meta-data in your project\'s manifest!\nFor more info : https://documentation.appsonair.com/Mobile-Quickstart/android-sdk-setup</string>
+</resources>
