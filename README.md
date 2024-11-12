@@ -20,6 +20,7 @@ Add meta-data to the app’'s AndroidManifest.xml file under the application tag
 
 ```sh
 </application>
+    ...
     <meta-data
         android:name="appId"
         android:value="********-****-****-****-************" />
