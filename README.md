@@ -66,5 +66,3 @@ val updateNetworkState = UpdateNetwork { isConnected ->
 
 NetworkService.checkConnectivity(this, updateNetworkState)
 ```
-
-
