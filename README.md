@@ -11,7 +11,7 @@ This SDK must be used with other AppsOnAir SDKs. This allows us to set and retri
 
 ## How to use?
 
-Add meta-data to the app’'s AndroidManifest.xml file under the application tag.
+Add meta-data to the app's AndroidManifest.xml file under the application tag.
 
 >Make sure meta-data name is “appId”.
 
