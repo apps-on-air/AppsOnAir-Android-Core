@@ -1,1 +1,69 @@
-# AppsOnAir-Android-Core [![](https://jitpack.io/v/apps-on-air/AppsOnAir-Android-Core.svg)](https://jitpack.io/#apps-on-air/AppsOnAir-Android-Core)
+# AppsOnAir-Android-Core
+
+## How it works? 
+
+It uses to check internet connectivity. It provides feature to set AppsOnAir Application ID (AppId).
+
+It is a core SDK of AppsOnAir. 
+
+This SDK must be used with other AppsOnAir SDKs. This allows us to set and retrieve the AppsOnAir Application ID.
+
+
+## How to use?
+
+Add meta-data to the app's AndroidManifest.xml file under the application tag.
+
+>Make sure meta-data name is “appId”.
+
+>Provide your application id in meta-data value.
+
+
+```sh
+</application>
+    ...
+    <meta-data
+        android:name="appId"
+        android:value="********-****-****-****-************" />
+</application>
+```
+
+Add AppsOnAir Core dependency to your gradle.
+
+```sh
+dependencies {
+   implementation 'com.github.apps-on-air:AppsOnAir-Android-Core:TAG'
+}
+```
+
+Add below code to setting.gradle.
+
+```sh
+dependencyResolutionManagement {
+   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+   repositories {
+       google()
+       mavenCentral()
+       maven {
+           url = uri("https://jitpack.io")
+       }
+   }
+}
+```
+
+## Example :
+
+To fetch your appId from manifest,
+
+```sh
+val appId: String = CoreService.getAppId(this)
+```
+
+To check internet connectivity,
+
+```sh
+val updateNetworkState = UpdateNetwork { isConnected ->
+    Log.d(TAG, "hasNetworkConnection: $isConnected")
+}
+
+NetworkService.checkConnectivity(this, updateNetworkState)
+```
