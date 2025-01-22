@@ -6,16 +6,21 @@ plugins {
 
 
 group = "com.appsonair"
-version = "1.0.3"
+version = "1.0.4"
 android {
     namespace 'com.appsonair.core'
     compileSdk 34
     defaultConfig {
         minSdk 24
         versionCode 1
-        versionName "1.0.3"
+        versionName "1.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
+        buildConfigField 'String', 'VERSION_CODE', VERSION_CODE
+        buildConfigField 'String', 'VERSION_NAME', VERSION_NAME
+    }
+    buildFeatures {
+        buildConfig = true
     }
     buildTypes {
         release {
@@ -55,7 +60,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.appsonair'
                 artifactId = 'core'
-                version = '1.0.3'
+                version = '1.0.4'
             }
         }
         repositories {
