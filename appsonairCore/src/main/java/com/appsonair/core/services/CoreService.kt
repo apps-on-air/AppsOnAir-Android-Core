@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import com.appsonair.core.R
+import org.json.JSONObject
 
 class CoreService {
     companion object {
@@ -38,6 +39,17 @@ class CoreService {
                 )
                 ""
             }
+        }
+
+        @JvmStatic
+        fun getDeviceInfo(context: Context, additionalInfo: Map<String, Any> = emptyMap()): JSONObject {
+            val deviceInfoService = DeviceInfoService.getInstance(context)
+
+            if (additionalInfo.isNotEmpty()){
+                return deviceInfoService.getDeviceInfo(additionalInfo)
+            }
+
+            return  deviceInfoService.deviceInfo
         }
     }
 }

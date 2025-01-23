@@ -35,6 +35,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val deviceInfo = CoreService.getDeviceInfo(this,)
+        Log.d("deviceInfo", deviceInfo.toString())
+
         val appId: String = CoreService.getAppId(this)
         Log.d(TAG, "appId: $appId")
 
