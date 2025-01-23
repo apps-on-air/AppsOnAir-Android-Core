@@ -14,54 +14,77 @@ import com.appsonair.core.BuildConfig
 import org.json.JSONObject
 import java.util.Locale
 
-internal class DeviceInfoService(private val context: Context) {
+internal class DeviceInfoService private constructor(private val context: Context) {
+
+    companion object {
+        @Volatile
+        private var instance: DeviceInfoService? = null
+
+        fun getInstance(context: Context): DeviceInfoService {
+            return instance ?: synchronized(this) {
+                instance ?: DeviceInfoService(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+
     val deviceInfo: JSONObject
         // Overloaded method without additionalInfo
         get() = getDeviceInfo(null)
+
+    private val pm = context.packageManager
+
+    private val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
+    } else {
+        @Suppress("DEPRECATION")
+        pm.getPackageInfo(context.packageName, 0)
+    }
+
+    private val buildVersionNumber = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        pInfo.longVersionCode.toInt()
+    } else {
+        @Suppress("DEPRECATION")
+        pInfo.versionCode
+    }
+
+    private val versionName = pInfo.versionName
+    private val appsOnAirCoreVersion = BuildConfig.VERSION_NAME
+    private val releaseVersion = getVersionName(versionName)
+    private val bundleIdentifier = context.packageName
+    private val appName = context.applicationInfo.loadLabel(context.packageManager).toString()
+    private val deviceModel = Build.MODEL
+    private val deviceTotalStorage = formatSize(totalStorage)
+    private val deviceOsVersion = Build.VERSION.RELEASE
+    private val deviceScreenSize = screenSize
 
     fun getDeviceInfo(additionalInfo: Map<String, Any>?): JSONObject {
         val deviceInfo = JSONObject()
         val appInfo = JSONObject()
         val systemInfo = JSONObject()
         try {
-            val pm = context.packageManager
-            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                pm.getPackageInfo(context.packageName, 0)
-            }
-            val versionName = pInfo.versionName
-            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                pInfo.longVersionCode.toInt()
-            } else {
-                @Suppress("DEPRECATION")
-                pInfo.versionCode
-            }
+            // Adding additional info in app info
+            additionalInfo?.forEach { (key, value) -> appInfo.put(key, value) }
 
+            // App information that will remain unchanged
+            appInfo.put("releaseVersionNumber", releaseVersion)
+            appInfo.put("buildVersionNumber", buildVersionNumber)
+            appInfo.put("appsOnAirCoreVersion", appsOnAirCoreVersion)
+            appInfo.put("bundleIdentifier", bundleIdentifier)
+            appInfo.put("appName", appName)
 
-            if (!additionalInfo.isNullOrEmpty()) {
-                for ((key, value) in additionalInfo) {
-                    appInfo.put(key, value)
-                }
-            }
+            // Device information that will remain unchanged
+            deviceInfo.put("deviceTotalStorage", deviceTotalStorage)
+            deviceInfo.put("deviceModel", deviceModel)
+            deviceInfo.put("deviceOsVersion", deviceOsVersion)
+            deviceInfo.put("deviceScreenSize", deviceScreenSize)
 
-            appInfo.put("releaseVersionNumber", getVersionName(versionName))
-            appInfo.put("buildVersionNumber", versionCode)
-            appInfo.put("appsOnAirCoreVersion", BuildConfig.VERSION_NAME)
-            appInfo.put("bundleIdentifier", context.packageName)
-            appInfo.put("appName", context.applicationInfo.loadLabel(context.packageManager).toString())
-
-            deviceInfo.put("deviceModel", Build.MODEL)
+            // Device information that can change
             deviceInfo.put("deviceUsedStorage", formatSize(usedStorage))
-            deviceInfo.put("deviceTotalStorage", formatSize(totalStorage))
             deviceInfo.put("deviceMemory", formatSize(deviceMemory))
             deviceInfo.put("appMemoryUsage", formatSize(appMemoryUsage))
             deviceInfo.put("deviceOrientation", deviceOrientation)
-            deviceInfo.put("deviceOsVersion", Build.VERSION.RELEASE)
             deviceInfo.put("deviceRegionCode", Locale.getDefault().country)
             deviceInfo.put("deviceBatteryLevel", batteryLevel)
-            deviceInfo.put("deviceScreenSize", screenSize)
             deviceInfo.put("deviceRegionName", Locale.getDefault().displayCountry)
             deviceInfo.put("timezone", TimeZone.getDefault().id)
             deviceInfo.put("networkState", networkState)
