@@ -34,9 +34,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-//        val additionalInfo: MutableMap<String, Any> = HashMap()
-//        additionalInfo["remark"] = "0.0.1"
-//        additionalInfo["Sync"] = "0.0.1"
+
         val deviceInfo = CoreService.getDeviceInfo(this,)
         Log.d("deviceInfo", deviceInfo.toString())
 

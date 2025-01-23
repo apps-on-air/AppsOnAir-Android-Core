@@ -43,7 +43,7 @@ class CoreService {
 
         @JvmStatic
         fun getDeviceInfo(context: Context, additionalInfo: Map<String, Any> = emptyMap()): JSONObject {
-            val deviceInfoService = DeviceInfoService(context)
+            val deviceInfoService = DeviceInfoService.getInstance(context)
 
             if (additionalInfo.isNotEmpty()){
                 return deviceInfoService.getDeviceInfo(additionalInfo)
