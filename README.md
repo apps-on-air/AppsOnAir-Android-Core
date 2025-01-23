@@ -58,6 +58,37 @@ To fetch your appId from manifest,
 val appId: String = CoreService.getAppId(this)
 ```
 
+To get the device information details without additional data.
+
+```sh
+Kotlin:
+
+val deviceInfo = CoreService.getDeviceInfo(this) //Without any additional details
+```
+
+```sh
+Java:
+
+JSONObject deviceInfos = CoreService.getDeviceInfo(this, Collections.emptyMap());
+```
+
+To get the device information details with additional data like passing additional version details.
+```sh
+Kotlin:
+
+val additionalInfo: MutableMap<String, Any> = HashMap()
+additionalInfo["remark"] = "0.0.1"
+additionalInfo["Sync"] = "0.0.1"
+val deviceInfo = CoreService.getDeviceInfo(this,additionalInfo)
+```
+
+```sh
+Java: 
+
+Map<String, Object> additionalInfo = Collections.singletonMap("appRemarkVersion", BuildConfig.VERSION_NAME);
+JSONObject deviceInfoWithAdditionalInfo = CoreService.getDeviceInfo(this, additionalInfo);
+```
+
 To check internet connectivity,
 
 ```sh
