@@ -2,6 +2,7 @@ package com.appsonair.core.services
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.icu.util.TimeZone
 import android.net.ConnectivityManager
@@ -24,11 +25,18 @@ class DeviceInfoService(private val context: Context) {
         val systemInfo = JSONObject()
         try {
             val pm = context.packageManager
-            val pInfo = pm.getPackageInfo(context.packageName, 0)
+            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, 0)
+            }
             val versionName = pInfo.versionName
-            var versionCode = pInfo.versionCode
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                versionCode = pInfo.longVersionCode.toInt()
+            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pInfo.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode
             }
 
 
@@ -123,8 +131,8 @@ class DeviceInfoService(private val context: Context) {
 
     private val batteryLevel: Int
         get() {
-            val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-            return bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            return bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
         }
 
     private val screenSize: String
