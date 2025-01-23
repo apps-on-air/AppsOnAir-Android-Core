@@ -14,7 +14,7 @@ import com.appsonair.core.BuildConfig
 import org.json.JSONObject
 import java.util.Locale
 
-class DeviceInfoService(private val context: Context) {
+internal class DeviceInfoService(private val context: Context) {
     val deviceInfo: JSONObject
         // Overloaded method without additionalInfo
         get() = getDeviceInfo(null)
