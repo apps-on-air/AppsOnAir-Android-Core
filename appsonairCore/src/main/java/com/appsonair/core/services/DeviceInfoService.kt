@@ -1,7 +1,10 @@
 package com.appsonair.core.services
 
+import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.icu.util.TimeZone
@@ -12,11 +15,14 @@ import android.os.Build
 import android.os.Environment
 import com.appsonair.core.BuildConfig
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 internal class DeviceInfoService private constructor(private val context: Context) {
 
     companion object {
+        @SuppressLint("StaticFieldLeak")
         @Volatile
         private var instance: DeviceInfoService? = null
 
@@ -36,7 +42,6 @@ internal class DeviceInfoService private constructor(private val context: Contex
     private val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
     } else {
-        @Suppress("DEPRECATION")
         pm.getPackageInfo(context.packageName, 0)
     }
 
@@ -88,6 +93,13 @@ internal class DeviceInfoService private constructor(private val context: Contex
             deviceInfo.put("deviceRegionName", Locale.getDefault().displayCountry)
             deviceInfo.put("timezone", TimeZone.getDefault().id)
             deviceInfo.put("networkState", networkState)
+            deviceInfo.put("brand",Build.BRAND)
+            deviceInfo.put("manufacturer",Build.MANUFACTURER)
+            deviceInfo.put("firstInstallTime",deviceFirstInstallTime)
+            deviceInfo.put("batteryStatus",deviceBatteryStatus)
+            deviceInfo.put("isSimulator",isRunningOnEmulator)
+            deviceInfo.put("getNetworkType",getNetworkType)
+            deviceInfo.put("platform","Android")
 
             systemInfo.put("deviceInfo", deviceInfo)
             systemInfo.put("appInfo", appInfo)
@@ -118,6 +130,82 @@ internal class DeviceInfoService private constructor(private val context: Contex
                     "Undefined"
                 }
             }
+        }
+
+    private val getNetworkType: String
+        get() {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+            val network = connectivityManager.activeNetwork ?: return "No Connection"
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "No Connection"
+
+            return when {
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Unknown"
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
+                    // Best guess based on downstream speed
+                    when {
+                        capabilities.linkDownstreamBandwidthKbps >= 50000 -> "5G/4G"
+                        capabilities.linkDownstreamBandwidthKbps >= 10000 -> "4G"
+                        capabilities.linkDownstreamBandwidthKbps >= 1000 -> "3G"
+                        else -> "2G"
+                    }
+                }
+                else -> "Unknown"
+            }
+        }
+
+    private val isRunningOnEmulator: Boolean
+        get() {
+            val fingerprint = Build.FINGERPRINT
+            val model = Build.MODEL
+            val product = Build.PRODUCT
+            val manufacturer = Build.MANUFACTURER
+            val brand = Build.BRAND
+            val device = Build.DEVICE
+            val hardware = Build.HARDWARE
+
+            return listOf(
+                "google_sdk", "sdk", "sdk_gphone64_x86_64", "vbox86p", "emulator", "simulator", "goldfish",
+                "ranchu", "generic", "miniSim", "genymotion"
+            ).any {
+                product.equals(it, ignoreCase = true) ||
+                        model.equals(it, ignoreCase = true) ||
+                        device.equals(it, ignoreCase = true) ||
+                        brand.equals(it, ignoreCase = true) ||
+                        manufacturer.equals(it, ignoreCase = true) ||
+                        fingerprint.equals(it, ignoreCase = true) ||
+                        hardware.equals(it, ignoreCase = true)
+            }
+        }
+
+    private val deviceFirstInstallTime: String
+        get() {
+            val packageInfo = context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.GET_PERMISSIONS
+            )
+            try {
+                val installDate = Date(packageInfo.firstInstallTime)
+                return  SimpleDateFormat("yyyy-MM-dd HH:mm:ss a", Locale.getDefault()).format(installDate)
+            } catch (e: Exception) {
+
+                return "Unavailable"
+            }
+        }
+
+    private val deviceBatteryStatus: String
+        get() {
+            val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+            val readableStatus = when (status) {
+                BatteryManager.BATTERY_STATUS_CHARGING -> "charging"
+                BatteryManager.BATTERY_STATUS_FULL -> "full"
+                BatteryManager.BATTERY_STATUS_DISCHARGING -> "discharging"
+                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "not charging"
+                BatteryManager.BATTERY_STATUS_UNKNOWN -> "unknown"
+                else -> "unknown"
+            }
+            return  readableStatus
         }
 
     private val usedStorage: Long
@@ -184,15 +272,15 @@ internal class DeviceInfoService private constructor(private val context: Contex
         var suffix: String? = null
         var fSize = size.toFloat()
 
-        if (size >= 1024) {
-            suffix = "KB"
+        if (fSize >= 1024f) {
             fSize /= 1024f
-            if (size >= 1024) {
-                suffix = "MB"
+            suffix = "KB"
+            if (fSize >= 1024f) {
                 fSize /= 1024f
-                if (size >= 1024) {
-                    suffix = "GB"
+                suffix = "MB"
+                if (fSize >= 1024f) {
                     fSize /= 1024f
+                    suffix = "GB"
                 }
             }
         }
