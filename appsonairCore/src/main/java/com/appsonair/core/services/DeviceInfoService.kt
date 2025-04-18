@@ -98,7 +98,7 @@ internal class DeviceInfoService private constructor(private val context: Contex
             deviceInfo.put("firstInstallTime",deviceFirstInstallTime)
             deviceInfo.put("batteryStatus",deviceBatteryStatus)
             deviceInfo.put("isSimulator",isRunningOnEmulator)
-            deviceInfo.put("getNetworkType",getNetworkType)
+            deviceInfo.put("getNetworkType",networkType)
             deviceInfo.put("platform","Android")
 
             systemInfo.put("deviceInfo", deviceInfo)
@@ -132,7 +132,7 @@ internal class DeviceInfoService private constructor(private val context: Contex
             }
         }
 
-    private val getNetworkType: String
+    private val networkType: String
         get() {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
