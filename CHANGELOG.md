@@ -1,3 +1,7 @@
+## 1.0.5
+
+* Added additional information in device information
+
 ## 1.0.4
 
 * Added support to get basic device information
