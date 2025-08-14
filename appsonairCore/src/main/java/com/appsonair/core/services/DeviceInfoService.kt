@@ -2,22 +2,29 @@ package com.appsonair.core.services
 
 import android.annotation.SuppressLint
 import android.app.ActivityManager
+import android.app.usage.StorageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.icu.util.TimeZone
+import java.util.TimeZone
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
+import android.os.StatFs
+import android.os.storage.StorageManager
+import androidx.annotation.RequiresApi
 import com.appsonair.core.BuildConfig
 import org.json.JSONObject
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 internal class DeviceInfoService private constructor(private val context: Context) {
 
@@ -58,7 +65,10 @@ internal class DeviceInfoService private constructor(private val context: Contex
     private val bundleIdentifier = context.packageName
     private val appName = context.applicationInfo.loadLabel(context.packageManager).toString()
     private val deviceModel = Build.MODEL
-    private val deviceTotalStorage = formatSize(totalStorage)
+    private val storage = getDeviceStorageDetails()
+    private val totalStorage = storage.total
+    private val usedStorage = storage.used
+    private val deviceTotalStorage = totalStorage
     private val deviceOsVersion = Build.VERSION.RELEASE
     private val deviceScreenSize = screenSize
 
@@ -66,6 +76,13 @@ internal class DeviceInfoService private constructor(private val context: Contex
         val deviceInfo = JSONObject()
         val appInfo = JSONObject()
         val systemInfo = JSONObject()
+        val manufacturer = Build.MANUFACTURER.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+        }
+        val brand = Build.BRAND.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+        }
+
         try {
             // Adding additional info in app info
             additionalInfo?.forEach { (key, value) -> appInfo.put(key, value) }
@@ -84,21 +101,21 @@ internal class DeviceInfoService private constructor(private val context: Contex
             deviceInfo.put("deviceScreenSize", deviceScreenSize)
 
             // Device information that can change
-            deviceInfo.put("deviceUsedStorage", formatSize(usedStorage))
-            deviceInfo.put("deviceMemory", formatSize(deviceMemory))
-            deviceInfo.put("appMemoryUsage", formatSize(appMemoryUsage))
+            deviceInfo.put("deviceUsedStorage", usedStorage)
+            deviceInfo.put("deviceMemory", formatStandardStorageSize(deviceMemory))
+            deviceInfo.put("appMemoryUsage", formatStandardStorageSize(appMemoryUsage))
             deviceInfo.put("deviceOrientation", deviceOrientation)
             deviceInfo.put("deviceRegionCode", Locale.getDefault().country)
             deviceInfo.put("deviceBatteryLevel", batteryLevel)
             deviceInfo.put("deviceRegionName", Locale.getDefault().displayCountry)
             deviceInfo.put("timezone", TimeZone.getDefault().id)
             deviceInfo.put("networkState", networkState)
-            deviceInfo.put("brand",Build.BRAND)
-            deviceInfo.put("manufacturer",Build.MANUFACTURER)
+            deviceInfo.put("brand",brand)
+            deviceInfo.put("manufacturer",manufacturer)
             deviceInfo.put("firstInstallTime",deviceFirstInstallTime)
             deviceInfo.put("batteryStatus",deviceBatteryStatus)
             deviceInfo.put("isSimulator",isRunningOnEmulator)
-            deviceInfo.put("getNetworkType",networkType)
+            deviceInfo.put("networkType",networkType)
             deviceInfo.put("platform","Android")
 
             systemInfo.put("deviceInfo", deviceInfo)
@@ -140,11 +157,11 @@ internal class DeviceInfoService private constructor(private val context: Contex
             val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "No Connection"
 
             return when {
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Unknown"
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
                 capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
                     // Best guess based on downstream speed
                     when {
-                        capabilities.linkDownstreamBandwidthKbps >= 50000 -> "5G/4G"
+                        capabilities.linkDownstreamBandwidthKbps >= 50000 -> "5G"
                         capabilities.linkDownstreamBandwidthKbps >= 10000 -> "4G"
                         capabilities.linkDownstreamBandwidthKbps >= 1000 -> "3G"
                         else -> "2G"
@@ -179,18 +196,21 @@ internal class DeviceInfoService private constructor(private val context: Contex
         }
 
     private val deviceFirstInstallTime: String
-        get() {
-            val packageInfo = context.packageManager.getPackageInfo(
-                context.packageName,
-                PackageManager.GET_PERMISSIONS
-            )
-            try {
-                val installDate = Date(packageInfo.firstInstallTime)
-                return  SimpleDateFormat("yyyy-MM-dd HH:mm:ss a", Locale.getDefault()).format(installDate)
-            } catch (e: Exception) {
-
-                return "Unavailable"
+        get() = try {
+            val pkgInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(
+                    context.packageName,
+                    PackageManager.PackageInfoFlags.of(0)
+                )
+            } else {
+                context.packageManager.getPackageInfo(context.packageName, 0)
             }
+
+            SimpleDateFormat("dd-MMM-yyyy hh:mm:ss a", Locale.US).apply {
+                timeZone = java.util.TimeZone.getDefault()
+            }.format(Date(pkgInfo.firstInstallTime))
+        } catch (e: Exception) {
+            "Unavailable"
         }
 
     private val deviceBatteryStatus: String
@@ -198,29 +218,105 @@ internal class DeviceInfoService private constructor(private val context: Contex
             val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
             val readableStatus = when (status) {
-                BatteryManager.BATTERY_STATUS_CHARGING -> "charging"
-                BatteryManager.BATTERY_STATUS_FULL -> "full"
-                BatteryManager.BATTERY_STATUS_DISCHARGING -> "discharging"
-                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "not charging"
-                BatteryManager.BATTERY_STATUS_UNKNOWN -> "unknown"
-                else -> "unknown"
+                BatteryManager.BATTERY_STATUS_CHARGING -> "Charging"
+                BatteryManager.BATTERY_STATUS_FULL -> "Fully Charged"
+                BatteryManager.BATTERY_STATUS_DISCHARGING -> "Not Charging"
+                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "Not Charging"
+                BatteryManager.BATTERY_STATUS_UNKNOWN -> "Battery state is unknown"
+                else -> "Unknown power state"
             }
             return  readableStatus
         }
 
-    private val usedStorage: Long
-        get() {
-            val path = Environment.getDataDirectory()
-            val totalSpace = path.totalSpace
-            val freeSpace = path.freeSpace
-            return totalSpace - freeSpace
+    private data class StorageInfo(val total: String, val used: String, val available: String)
+    @SuppressLint("ServiceCast")
+    private fun getDeviceStorageDetails(): StorageInfo =
+        if (isSamsungDevice()) getSamsungDeviceStorageDetails() else getStandardDeviceStorageDetails()
+
+    private fun isSamsungDevice() =
+        Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+
+    @SuppressLint("ServiceCast")
+    private fun getSamsungDeviceStorageDetails(): StorageInfo =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val ssm = context.getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+                val sm = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+                val uuid = getSamsungStorageUuid(sm)
+                val total = ssm.getTotalBytes(uuid)
+                val free = ssm.getFreeBytes(uuid)
+                StorageInfo(
+                    formatSamsungStorageSize(total),
+                    formatSamsungStorageSize(total - free),
+                    formatSamsungStorageSize(free)
+                )
+            } catch (_: Exception) { getSamsungStorageDetailsUsingStatFs() }
+        } else getSamsungStorageDetailsUsingStatFs()
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun getSamsungStorageUuid(sm: StorageManager): UUID = try {
+        sm.primaryStorageVolume.uuid?.let(UUID::fromString) ?: StorageManager.UUID_DEFAULT
+    } catch (_: Exception) {
+        try {
+            sm.storageVolumes.find { it.isPrimary && !it.isRemovable }?.uuid?.let(UUID::fromString)
+                ?: StorageManager.UUID_DEFAULT
+        } catch (_: Exception) { StorageManager.UUID_DEFAULT }
+    }
+
+    private fun getSamsungStorageDetailsUsingStatFs(): StorageInfo = try {
+        val stat = StatFs(Environment.getDataDirectory().path)
+        val total = stat.totalBytes
+        val free = stat.availableBytes
+        StorageInfo(
+            formatSamsungStorageSize(total),
+            formatSamsungStorageSize(total - free),
+            formatSamsungStorageSize(free)
+        )
+    } catch (_: Exception) { StorageInfo("0 GB", "0 GB", "0 GB") }
+
+    private fun formatSamsungStorageSize(bytes: Long): String {
+        val df = DecimalFormat("#.##", DecimalFormatSymbols(Locale.US))
+        return when {
+            bytes >= 1_073_741_824 -> df.format(bytes / 1_073_741_824.0) + " GB"
+            bytes >= 1_048_576 -> df.format(bytes / 1_048_576.0) + " MB"
+            bytes >= 1_024 -> df.format(bytes / 1_024.0) + " KB"
+            else -> "$bytes B"
+        }
+    }
+
+    private fun getStandardDeviceStorageDetails(): StorageInfo =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ssm = context.getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+            val sm = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            val uuid = sm.primaryStorageVolume.uuid?.let(UUID::fromString)
+                ?: StorageManager.UUID_DEFAULT
+            val total = ssm.getTotalBytes(uuid)
+            val free = ssm.getFreeBytes(uuid)
+            StorageInfo(
+                formatStandardStorageSize(total),
+                formatStandardStorageSize(total - free),
+                formatStandardStorageSize(free)
+            )
+        } else {
+            val stat = StatFs(Environment.getDataDirectory().path)
+            val total = stat.totalBytes
+            val free = stat.availableBytes
+            StorageInfo(
+                formatStandardStorageSize(total),
+                formatStandardStorageSize(total - free),
+                formatStandardStorageSize(free)
+            )
         }
 
-    private val totalStorage: Long
-        get() {
-            val path = Environment.getDataDirectory()
-            return path.totalSpace
+    private fun formatStandardStorageSize(bytes: Long): String {
+        val df = DecimalFormat("#.##", DecimalFormatSymbols(Locale.US))
+        return when {
+            bytes >= 1_000_000_000 -> df.format(bytes / 1_000_000_000.0) + " GB"
+            bytes >= 1_000_000 -> df.format(bytes / 1_000_000.0) + " MB"
+            bytes >= 1_000 -> df.format(bytes / 1_000.0) + " KB"
+            else -> "$bytes B"
         }
+    }
 
     private val deviceMemory: Long
         get() {
@@ -240,10 +336,11 @@ internal class DeviceInfoService private constructor(private val context: Contex
         }
 
 
-    private val batteryLevel: Int
+    private val batteryLevel: String
         get() {
             val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
-            return bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+            val level = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+            return if (level >= 0) "$level%" else "Unavailable"
         }
 
     private val screenSize: String
@@ -261,38 +358,9 @@ internal class DeviceInfoService private constructor(private val context: Contex
             val networkCapabilities = cm.getNetworkCapabilities(activeNetwork)
 
             return when {
-                networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "WiFi"
+                networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi"
                 networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "Mobile Data"
                 else -> "No Connection"
             }
         }
-
-
-    private fun formatSize(size: Long): String {
-        var suffix: String? = null
-        var fSize = size.toFloat()
-
-        if (fSize >= 1024f) {
-            fSize /= 1024f
-            suffix = "KB"
-            if (fSize >= 1024f) {
-                fSize /= 1024f
-                suffix = "MB"
-                if (fSize >= 1024f) {
-                    fSize /= 1024f
-                    suffix = "GB"
-                }
-            }
-        }
-        val resultBuffer = StringBuilder(fSize.toString())
-        val commaOffset = resultBuffer.indexOf(".")
-        if (commaOffset >= 0) {
-            val endIndex = commaOffset + 3
-            if (endIndex < resultBuffer.length) {
-                resultBuffer.setLength(endIndex)
-            }
-        }
-        if (suffix != null) resultBuffer.append(suffix)
-        return resultBuffer.toString()
-    }
 }

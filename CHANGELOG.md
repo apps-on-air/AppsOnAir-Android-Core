@@ -1,3 +1,7 @@
+## 1.0.6
+
+* Minor improvement and fixes
+
 ## 1.0.5
 
 * Added additional information in device information
