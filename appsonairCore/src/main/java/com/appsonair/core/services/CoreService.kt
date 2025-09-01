@@ -16,7 +16,7 @@ class CoreService {
                 )
                 val bundle = appInfo.metaData
                 if (bundle != null) {
-                    val appId = bundle.getString("appId") ?: ""
+                    val appId = bundle.getString("AppsonairAppId") ?: bundle.getString("appId") ?: ""
                     appId.ifEmpty {
                         Log.d(
                             "CoreService",
