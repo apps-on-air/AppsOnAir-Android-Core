@@ -1,3 +1,7 @@
+## 1.1.0
+
+* Rename the key from appId to AppsonairAppId
+
 ## 1.0.6
 
 * Minor improvement and fixes

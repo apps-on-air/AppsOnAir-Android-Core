@@ -26,7 +26,7 @@
             </intent-filter>
         </activity>
         <meta-data
-            android:name="appId"
+            android:name="AppsonairAppId"
             android:value="********-****-****-****-************" />
     </application>
 </manifest>
