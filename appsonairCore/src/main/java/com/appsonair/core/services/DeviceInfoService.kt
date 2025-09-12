@@ -331,8 +331,10 @@ internal class DeviceInfoService private constructor(private val context: Contex
         get() {
             val activityManager =
                 context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val memoryClass = activityManager.memoryClass
-            return memoryClass * 1024L * 1024L // Converting MB to Bytes
+            val memoryInfoArray = activityManager.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid()))
+            val memoryInfo = memoryInfoArray[0]
+            val memoryKB = memoryInfo.totalPrivateDirty + memoryInfo.totalPrivateClean
+            return memoryKB * 1024L  // Convert KB to Bytes
         }
 
 
