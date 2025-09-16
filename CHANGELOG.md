@@ -1,3 +1,7 @@
+## 1.1.1
+
+* Fix memory usage issue
+
 ## 1.1.0
 
 * Rename the key from appId to AppsonairAppId
