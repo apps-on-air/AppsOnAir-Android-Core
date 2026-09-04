@@ -33,6 +33,9 @@ internal class DeviceInfoService private constructor(private val context: Contex
         @Volatile
         private var instance: DeviceInfoService? = null
 
+        private const val PREFS_NAME = "appsonair_core"
+        private const val KEY_DEVICE_ID = "device_id"
+
         fun getInstance(context: Context): DeviceInfoService {
             return instance ?: synchronized(this) {
                 instance ?: DeviceInfoService(context.applicationContext).also { instance = it }
@@ -72,13 +75,94 @@ internal class DeviceInfoService private constructor(private val context: Contex
     private val deviceOsVersion = Build.VERSION.RELEASE
     private val deviceScreenSize = screenSize
 
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    // Stable per-install identifier, generated once and then persisted.
+    // Lifetime is not symmetric with iOS Core: this value lives in SharedPreferences and is
+    // cleared on uninstall, while iOS keeps the equivalent in the Keychain, where it survives
+    // uninstall. Consumers must not assume the two platforms behave the same way.
+    val deviceId: String by lazy {
+        prefs.getString(KEY_DEVICE_ID, null) ?: UUID.randomUUID().toString().also {
+            // commit() rather than apply(): the first write has to be durable before the value
+            // is handed out, so a crash straight after generation cannot yield a different ID
+            // on the next launch.
+            prefs.edit().putString(KEY_DEVICE_ID, it).commit()
+        }
+    }
+
+    // Android API level (e.g. 34). Android-only - iOS has no equivalent.
+    val apiLevel: Int get() = Build.VERSION.SDK_INT
+
+    // ISO 639-1 language code. Java reports the obsolete codes for three languages for
+    // backward compatibility; they are normalized so Core reports the same value as iOS
+    // for the same device language.
+    val language: String
+        get() = when (val code = Locale.getDefault().language) {
+            "iw" -> "he"  // Hebrew
+            "in" -> "id"  // Indonesian
+            "ji" -> "yi"  // Yiddish
+            else -> code
+        }
+
+    // IANA timezone identifier (e.g. "America/New_York").
+    val timezone: String get() = TimeZone.getDefault().id
+
+    // ISO 3166-1 alpha-2 region code (e.g. "US").
+    val regionCode: String get() = Locale.getDefault().country
+
+    // Device manufacturer, title-cased (e.g. "Samsung"). Same value getDeviceInfo() reports.
+    val manufacturer: String
+        get() = Build.MANUFACTURER.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+        }
+
+    // Primary locale as language_REGION (e.g. "en_IN"). Ported from AppRemark Android's
+    // getLocale(). Overlaps `language` + `regionCode`, which are the same facts split apart.
+    val locale: String
+        get() {
+            val primary = context.resources.configuration.locales[0]
+            return "${primary.language}_${primary.country}"
+        }
+
+    // "light" / "dark" / "undefined". Ported from AppRemark Android's getThemeMode().
+    val themeMode: String
+        get() = when (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) {
+            Configuration.UI_MODE_NIGHT_NO -> "light"
+            Configuration.UI_MODE_NIGHT_YES -> "dark"
+            else -> "undefined"
+        }
+
+    // System font scale, 1.0 being the default. Ported from AppRemark Android's getFontScale().
+    val fontScale: Float
+        get() = context.resources.configuration.fontScale
+
+    // Store or sideload the app was installed from. Ported verbatim from AppRemark Android's
+    // getInstallVendor() so the two report identical values. Note the vocabulary is NOT the
+    // same as iOS Core's - Android reports store display names, iOS reports appStore /
+    // testFlight / other.
+    val installVendor: String
+        get() = try {
+            @Suppress("DEPRECATION") val installer =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    pm.getInstallSourceInfo(context.packageName).installingPackageName
+                } else {
+                    pm.getInstallerPackageName(context.packageName)
+                }
+
+            when (installer) {
+                "com.android.vending" -> "Google Play Store"
+                "com.amazon.venezia" -> "Amazon Appstore"
+                null -> "Unknown"
+                else -> installer
+            }
+        } catch (e: Exception) {
+            "Unknown"
+        }
+
     fun getDeviceInfo(additionalInfo: Map<String, Any>?): JSONObject {
         val deviceInfo = JSONObject()
         val appInfo = JSONObject()
         val systemInfo = JSONObject()
-        val manufacturer = Build.MANUFACTURER.replaceFirstChar {
-            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-        }
         val brand = Build.BRAND.replaceFirstChar {
             if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
         }
@@ -99,16 +183,19 @@ internal class DeviceInfoService private constructor(private val context: Contex
             deviceInfo.put("deviceModel", deviceModel)
             deviceInfo.put("deviceOsVersion", deviceOsVersion)
             deviceInfo.put("deviceScreenSize", deviceScreenSize)
+            deviceInfo.put("deviceId", deviceId)
+            deviceInfo.put("apiLevel", apiLevel)
 
             // Device information that can change
             deviceInfo.put("deviceUsedStorage", usedStorage)
             deviceInfo.put("deviceMemory", formatStandardStorageSize(deviceMemory))
             deviceInfo.put("appMemoryUsage", formatStandardStorageSize(appMemoryUsage))
             deviceInfo.put("deviceOrientation", deviceOrientation)
-            deviceInfo.put("deviceRegionCode", Locale.getDefault().country)
+            deviceInfo.put("deviceRegionCode", regionCode)
+            deviceInfo.put("language", language)
             deviceInfo.put("deviceBatteryLevel", batteryLevel)
             deviceInfo.put("deviceRegionName", Locale.getDefault().displayCountry)
-            deviceInfo.put("timezone", TimeZone.getDefault().id)
+            deviceInfo.put("timezone", timezone)
             deviceInfo.put("networkState", networkState)
             deviceInfo.put("brand",brand)
             deviceInfo.put("manufacturer",manufacturer)
@@ -124,6 +211,34 @@ internal class DeviceInfoService private constructor(private val context: Contex
             e.printStackTrace()
         }
         return systemInfo
+    }
+
+    // Cheap, synchronous device facts, bundled for callers that need several at once.
+    // Deliberately excludes everything expensive or volatile that getDeviceInfo() reports -
+    // no storage, memory, battery or network work - so this stays safe to call from a
+    // synchronous payload builder on both platforms. The non-trivial reads are
+    // firstInstallTime and installVendor, one PackageManager lookup each.
+    //
+    // No try/catch: with literal keys and String/Int/Boolean values these puts cannot throw,
+    // and swallowing a failure would resurface as a confusing JSONException in the caller.
+    fun getDeviceMetadata(): JSONObject = JSONObject().apply {
+        put("deviceId", deviceId)
+        put("language", language)
+        put("apiLevel", apiLevel)
+        put("osVersion", deviceOsVersion)
+        put("timezone", timezone)
+        put("regionCode", regionCode)
+        put("appVersion", releaseVersion ?: "")
+        put("buildVersionNumber", buildVersionNumber)
+        put("platform", "Android")
+        put("locale", locale)
+        put("themeMode", themeMode)
+        put("fontScale", fontScale.toDouble())
+        put("deviceModel", deviceModel)
+        put("manufacturer", manufacturer)
+        put("installVendor", installVendor)
+        put("isSimulator", isRunningOnEmulator)
+        put("firstInstallTime", deviceFirstInstallTime)
     }
 
     private fun getVersionName(version: String?): String? {
