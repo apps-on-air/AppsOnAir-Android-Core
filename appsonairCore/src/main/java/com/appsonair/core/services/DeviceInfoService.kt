@@ -235,6 +235,12 @@ internal class DeviceInfoService private constructor(private val context: Contex
         put("themeMode", themeMode)
         put("fontScale", fontScale.toDouble())
         put("deviceModel", deviceModel)
+        // Raw model code, the counterpart of iOS Core's rawDeviceModel. On Android
+        // Build.MODEL already IS the unmapped code ("SM-G996B"), so this is the same value
+        // as deviceModel - it exists so the Push payload reads one key name on both
+        // platforms, and so a later change to deviceModel cannot silently alter the wire
+        // value the console maps to a marketing name.
+        put("rawDeviceModel", deviceModel)
         put("manufacturer", manufacturer)
         put("installVendor", installVendor)
         put("isSimulator", isRunningOnEmulator)

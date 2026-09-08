@@ -84,8 +84,8 @@ class CoreService {
          * Cheap, synchronous device facts, bundled for callers that need several at once —
          * everything the Push and AppRemark SDKs need from Core: `deviceId`, `language`,
          * `locale`, `regionCode`, `apiLevel`, `osVersion`, `platform`, `timezone`,
-         * `deviceModel`, `manufacturer`, `appVersion`, `buildVersionNumber`, `themeMode`,
-         * `fontScale`, `isSimulator`, `firstInstallTime` and `installVendor`.
+         * `deviceModel`, `rawDeviceModel`, `manufacturer`, `appVersion`, `buildVersionNumber`,
+         * `themeMode`, `fontScale`, `isSimulator`, `firstInstallTime` and `installVendor`.
          *
          * Unlike [getDeviceInfo], nothing here touches storage, memory, battery or the
          * network — the only non-trivial reads are `firstInstallTime` and `installVendor`,
