@@ -1,7 +1,8 @@
 ## 1.2.2
 
 * Added `deviceId`, `apiLevel` and `language` to device information
-* Added `getDeviceMetadata()` method returning cheap synchronous device facts (deviceId, language, locale, regionCode, apiLevel, osVersion, platform, timezone, deviceModel, manufacturer, appVersion, buildVersionNumber, themeMode, fontScale, isSimulator, firstInstallTime, installVendor) for SDKs
+* Added `getDeviceMetadata()` method returning cheap synchronous device facts (deviceId, language, locale, regionCode, apiLevel, osVersion, platform, timezone, deviceModel, rawDeviceModel, manufacturer, appVersion, buildVersionNumber, themeMode, fontScale, isSimulator, firstInstallTime, installVendor) for SDKs
+* Added `rawDeviceModel` — raw model code, matching iOS Core
 
 ## 1.1.1
 
